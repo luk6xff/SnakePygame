@@ -92,13 +92,12 @@ class Game:
                                                    pygame.image.load(get_path('game_background.jpg')),
                                                    pygame.image.load(get_path('game_texture.jpg')))
                                                    
-        Music = namedtuple('Music', ['POINT', 'HIT', 'EVOLUTION'])
-        self.ctx['res_holder']['music'] = Music(pygame.mixer.Sound(get_path("sfx_point.wav")),
-                                                pygame.mixer.Sound(get_path("sfx_hit.wav")),
-                                                pygame.mixer.Sound(get_path("Star_Wars_-_Imperial_march.wav")))
+        Music = namedtuple('Music', ['POINT', 'HIT'])
+        self.ctx['res_holder']['music'] = Music(pygame.mixer.Sound(get_path("point.wav")),
+                                                pygame.mixer.Sound(get_path("hit.wav")))
     
-        Font = namedtuple('Font', ['flup'])
-        self.ctx['res_holder']['font'] = Font(get_path('flup.ttf'))
+        Font = namedtuple('Font', ['font'])
+        self.ctx['res_holder']['font'] = Font(get_path('font.ttf'))
 
         pygame.mixer.music.load(get_path('music.mp3'))
         pygame.mixer.music.set_volume(0.2)
@@ -108,7 +107,7 @@ class Game:
         """
         Draws a text on a screen area
         """  
-        font = pygame.font.Font(self.ctx['res_holder']['font'].flup, size)
+        font = pygame.font.Font(self.ctx['res_holder']['font'].font, size)
         text_surface = font.render(text, True, color)
         text_rect = text_surface.get_rect()
         text_rect.midtop = (x, y)
@@ -179,7 +178,7 @@ class Game:
         """
         Updates the score value on the screen
         """       
-        font = pygame.font.Font(self.ctx['res_holder']['font'].flup, 30)
+        font = pygame.font.Font(self.ctx['res_holder']['font'].font, 30)
         text = font.render('SCORE: {}'.format(score), True, self.ctx['res_holder']['color'].black)
         self.ctx['screen'].blit(text, [30,30])
 
@@ -193,6 +192,9 @@ class Game:
     def play(self):
         self.handle_event()
         self.update()
+        # Do not draw next step if state changed already
+        if self._current_state is not 'play':
+            return
         self.draw()
         self.clock.tick(self.speed) 
 
