@@ -16,13 +16,14 @@ screen_height = 600
 sprite_size = namedtuple('sprite_size', ['x', 'y'])(30, 30)
 screen_texture_size = (sprite_size.x, sprite_size.y, screen_width - sprite_size.x, screen_height - sprite_size.y)
 
-FPS = 3
+
 
 
 
 class Game:
 
     DIRECTIONS = {'right':(1,0), 'left':(-1,0), 'up':(0,-1), 'down':(0,1)}
+    FPS = 5
 
     def __init__(self):
         os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -38,9 +39,17 @@ class Game:
         self.clock = pygame.time.Clock() 
         self.load_resources('resources')
 
-        # Game variables
-        self.states = ['intro', 'init', 'run', 'pause', 'over', 'exit']
-        self.current_state = 'intro'
+        # Game states dictionary
+
+        self.states = {'menu':self.menu, 'init':self.init, 'play':self.play, 'pause':self.pause, 'over':self.game_over, 'exit':self.exit}
+        self._current_state = 'menu'
+
+    def _set_state(self, state):
+        if state in self.states.keys():
+            self._current_state = state
+        else:
+            raise ValueError("Invalid state: {} cannot be set! Available game states are: {}".format(state).format(''.join(self.states)))
+        
 
     
     def _create_entities(self):
@@ -133,22 +142,17 @@ class Game:
 
     def check_collision(self):
         snake = self.snake.get_locations()
-        print(snake)
         stones = self.stones.get_locations()
         apples = self.apples.get_locations()
 
-        # if snake[0] in self.wall:
-        #     self.ctx['res_holder']['music'].HIT.play()
-        #     self.game_over = True  
-        # check collision with the wall
         if not(snake[0][0] > screen_texture_size[0] and snake[0][0] < screen_texture_size[2] \
            and snake[0][1] > screen_texture_size[1] and snake[0][1] < screen_texture_size[3]):
             self.ctx['res_holder']['music'].HIT.play()
-            self.game_over = True
+            self._set_state('over') 
         # check if collision with stone occured
         if snake[0] in stones:
             self.ctx['res_holder']['music'].HIT.play()
-            self.game_over = True
+            self._set_state('over') 
         # check collision with apples
         try:
             i = apples.index(snake[0])
@@ -158,84 +162,100 @@ class Game:
             self.apples.create(self)
         except ValueError:
             pass
-        return
 
     def score(self, score):
-        font = pygame.font.Font(self.ctx['res_holder']['font'].flup, 25)
+        font = pygame.font.Font(self.ctx['res_holder']['font'].flup, 30)
         text = font.render('SCORE: {}'.format(score), True, self.ctx['res_holder']['color'].black)
-        self.ctx['screen'].blit(text, [20,20])
+        self.ctx['screen'].blit(text, [30,30])
 
-    #### STATES ####
-    def init(self):
-        
-        self.game_exit = False
-        self.game_over = False
-        
+    #### STATES callbacks ####
+    def init(self):        
         self.points = 0
-        self.speed = FPS
+        self.speed = Game.FPS
 
         self.lead_x = screen_width/2 
         self.lead_y = screen_height/2 
         self.lead_x_change = sprite_size 
         self.lead_y_change = 0 
         self._create_entities()
+        self._set_state('play')
+
+    def play(self):
+        self.handle_event()
+        self.update()
+        self.draw()
+        self.clock.tick(self.speed) 
+
 
     def pause(self):        
         self.draw_text("PAUSE", self.ctx['res_holder']['color'].black, 60, screen_width/2, screen_height/2 -130)
         self.draw_text("Press P to continue", self.ctx['res_holder']['color'].black, 30, screen_width/2, screen_height/2)
         pygame.display.update()
         
-        while True:      
+        while self._current_state == 'pause':      
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_p:
-                        return
+                        self._set_state('play')
 
-    def intro(self):
-
-        buttons = [Button(self.ctx['screen'], "PLAY", (screen_width//2, screen_height//2 - 150), lambda : print("PLAY")),
-                   Button(self.ctx['screen'], "QUIT", (screen_width//2, screen_height//2 - 30), lambda : print("QUIT")) ]
-        while True:
+    def menu(self):
+        buttons = [Button(self.ctx['screen'], "PLAY", (screen_width//2, screen_height//2 - 50), lambda: self._set_state('init')),
+                   Button(self.ctx['screen'], "QUIT", (screen_width//2, screen_height//2 + 50), lambda: self._set_state('exit'))]
+        
+        while self._current_state == 'menu':
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    pygame.font.quit()
-                    quit()
+                    self._set_state('exit')
                 elif event.type == pygame.MOUSEBUTTONDOWN:              
                     for b in buttons:
                         b.mouse_button_down()
+            
             self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_texture, (0,0))
+            self.draw_text("RETRO SNAKE GAME", self.ctx['res_holder']['color'].black, 50, screen_width//2, 10)
+            self.draw_text("by luk6xff (2019)", self.ctx['res_holder']['color'].black, 20, screen_width-150, screen_height-40)
             for b in buttons:
                 b.draw()                       
             pygame.display.update()
-
-            self.clock.tick(15)
+            self.clock.tick(50)
     
-    def gameover(self):
-        while self.game_over == True: 
+    def game_over(self):
+        buttons = [Button(self.ctx['screen'], "MENU", (screen_width//2, screen_height//2 - 100), lambda: self._set_state('menu')),
+                   Button(self.ctx['screen'], "PLAY AGAIN", (screen_width//2, screen_height//2), lambda: self._set_state('init')),
+                   Button(self.ctx['screen'], "QUIT", (screen_width//2, screen_height//2 + 100), lambda: self._set_state('exit')) ]
+        
+        while self._current_state == 'over': 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    self.game_exit = True
-                    return
-                if event.type == pygame.KEYDOWN:
+                    self._set_state('exit')
+                elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
-                        self.game_over = True
-                        self.game_over = False 
+                        self._set_state('exit')
                     if event.key == pygame.K_c:
-                        self.init()              
+                        self._set_state('init')
+                elif event.type == pygame.MOUSEBUTTONDOWN:              
+                    for b in buttons:
+                        b.mouse_button_down()
+           
             self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_texture, (0,0))
-            self.draw_text("SCORE: " + str(self.points), self.ctx['res_holder']['color'].black, 50, screen_width/2, screen_height/2+60)
+            self.draw_text("SCORE: " + str(self.points), self.ctx['res_holder']['color'].black, 50, screen_width//2, 0)
                     
-        # self.button("MENU", 100, 450, 200, 70, self.red, self.light_red, action = 'menu')
-        # self.button("PLAY AGAIN", 350, 450, 200, 70, self.red, self.light_red, action = 'again')
-        # self.button("QUIT", 600, 450, 200, 70, self.red, self.light_red, action = 'quit')
-        pygame.display.update()         
-        self.clock.tick(15)       
-     
+            for b in buttons:
+                b.draw()  
+            pygame.display.update()         
+            self.clock.tick(50)
+
+    def exit(self):
+        pygame.quit()
+        pygame.font.quit()
+        quit()
+    #### STATES callbacks end ####
+
+
+    ### Gameplay state main methods ###
     def handle_event(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
-                self.game_exit= True
+                self._set_state('exit')
             if event.type == pygame.KEYDOWN:
                 if (event.key == pygame.K_LEFT):
                     self.snake.update_direction(self.DIRECTIONS['left'])
@@ -246,7 +266,7 @@ class Game:
                 elif (event.key == pygame.K_DOWN):
                     self.snake.update_direction(self.DIRECTIONS['down'])
                 if event.key == pygame.K_p:
-                    self.pause()
+                    self._set_state('pause') 
 
     def update(self):
         self.snake.update()
@@ -264,32 +284,26 @@ class Game:
 
 
     def run(self):
-
-        self.init()
-
-        if self.current_state == 'intro':
-            self.intro()
-        while not self.game_exit: 
-            self.handle_event()
-            self.update()
-                                   
-
-
-            self.draw() 
-            self.clock.tick(self.speed) 
-                
-        pygame.quit()
-        pygame.font.quit()
-        quit()
+        try: 
+            while True:
+                self.states[self._current_state]()
+        except Exception as e:
+            print(str(e))
+            self.exit()
 
 
 
 class Button():
-    WHITE = (255, 255, 255)
-    GREY = (200, 200, 200)
+    '''
+    Utility Button class
+    '''
+
+    # colors taken from here https://www.webucator.com/blog/2015/03/python-color-constants-module/
+    CYAN3 = (0, 205, 205)
+    CADETBLUE3= (122, 197, 205)
     BLACK = (0, 0, 0)
     
-    def __init__(self, screen, txt, location, action, bg=WHITE, fg=BLACK, size=(270, 90), font_name="Segoe Print", font_size=16):
+    def __init__(self, screen, txt, location, action, bg=CYAN3, fg=BLACK, size=(270, 90), font_name="Segoe Print", font_size=30):
         self.color = bg  # the static (normal) color
         self.bg = bg  # actual game_background color, can change on mouseover
         self.fg = fg  # text color
@@ -316,7 +330,7 @@ class Button():
         self.bg = self.color
         pos = pygame.mouse.get_pos()
         if self.rect.collidepoint(pos):
-            self.bg = Button.GREY  # mouseover color
+            self.bg = Button.CADETBLUE3 # mouseover color
 
     def mouse_button_down(self):
         pos = pygame.mouse.get_pos()    
@@ -435,7 +449,6 @@ class Snake():
                 sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].HEAD)
             elif i == len(self.snake)-1:
                 sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TAIL)
-            print(seg)  
             ctx['screen'].blit(sprite, seg.location)       
 
     @staticmethod
