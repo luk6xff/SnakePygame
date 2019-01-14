@@ -18,8 +18,6 @@ screen_texture_size = (sprite_size.x, sprite_size.y, screen_width - sprite_size.
 
 
 
-
-
 class Game:
 
     DIRECTIONS = {'right':(1,0), 'left':(-1,0), 'up':(0,-1), 'down':(0,1)}
@@ -53,10 +51,12 @@ class Game:
 
     
     def _create_entities(self):
-        # Create game objects ( Snake, apples , stones)
+        """
+        Creates game objects (Snake, apples, stones)
+        """
         self.wall = []
         self.draw_wall()
-        self.snake = Snake((self.lead_x, self.lead_y), 'right')
+        self.snake = Snake((screen_width//2, screen_height//2), 'right')
         self.stones = Stone()
         self.apples = Apple()
         self.stones.create(self) # Create one stone
@@ -65,6 +65,9 @@ class Game:
 
 
     def load_resources(self, res_path):
+        """
+        Loads all the game resources from the given path
+        """
 
         def get_path(entity_path):
             return os.path.join(res_path, entity_path)
@@ -102,6 +105,9 @@ class Game:
         pygame.mixer.music.play(loops=-1)
 
     def draw_text(self, text, color, size, x, y):
+        """
+        Draws a text on a screen area
+        """  
         font = pygame.font.Font(self.ctx['res_holder']['font'].flup, size)
         text_surface = font.render(text, True, color)
         text_rect = text_surface.get_rect()
@@ -129,6 +135,9 @@ class Game:
             self.wall.append(b)
 
     def generate_random_location(self):
+        """
+        Returns a random location of the sprite in the area
+        """  
         snake = self.snake.get_locations()
         stones = self.stones.get_locations()
         apples = self.apples.get_locations()
@@ -141,6 +150,9 @@ class Game:
         return xy
 
     def check_collision(self):
+        """
+        Checks if collision between snake and other entities occured
+        """   
         snake = self.snake.get_locations()
         stones = self.stones.get_locations()
         apples = self.apples.get_locations()
@@ -164,6 +176,9 @@ class Game:
             pass
 
     def score(self, score):
+        """
+        Updates the score value on the screen
+        """       
         font = pygame.font.Font(self.ctx['res_holder']['font'].flup, 30)
         text = font.render('SCORE: {}'.format(score), True, self.ctx['res_holder']['color'].black)
         self.ctx['screen'].blit(text, [30,30])
@@ -172,11 +187,6 @@ class Game:
     def init(self):        
         self.points = 0
         self.speed = Game.FPS
-
-        self.lead_x = screen_width/2 
-        self.lead_y = screen_height/2 
-        self.lead_x_change = sprite_size 
-        self.lead_y_change = 0 
         self._create_entities()
         self._set_state('play')
 
@@ -185,7 +195,6 @@ class Game:
         self.update()
         self.draw()
         self.clock.tick(self.speed) 
-
 
     def pause(self):        
         self.draw_text("PAUSE", self.ctx['res_holder']['color'].black, 60, screen_width/2, screen_height/2 -130)
@@ -253,6 +262,9 @@ class Game:
 
     ### Gameplay state main methods ###
     def handle_event(self):
+        """
+        Responsible handling all the external events during the play state
+        """
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 self._set_state('exit')
@@ -269,11 +281,17 @@ class Game:
                     self._set_state('pause') 
 
     def update(self):
+        """
+        Responsible for updating game status 
+        """
         self.snake.update()
         self.check_collision()
 
 
     def draw(self):
+        """
+        Responsible for redrawing all the whole screen during the play state
+        """
         self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_background, (0,0))
         self.draw_wall() 
         self.apples.draw(self.ctx)
@@ -284,6 +302,9 @@ class Game:
 
 
     def run(self):
+        """
+        Main run method of the game 
+        """
         try: 
             while True:
                 self.states[self._current_state]()
