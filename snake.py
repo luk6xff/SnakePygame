@@ -2,7 +2,8 @@ import pygame
 import random
 import os
 from collections import namedtuple, defaultdict
-
+from collections import deque
+from operator import add,mul
 
 # resources taken from:
 #  http://www.biryuk.com/2015/05/free-snake-sprites.html
@@ -12,10 +13,16 @@ from collections import namedtuple, defaultdict
 
 screen_width = 900
 screen_height = 600
-sprite_size = namedtuple('sprite_size', ['x', 'y'])(30, 30) 
-FPS = 10
+sprite_size = namedtuple('sprite_size', ['x', 'y'])(30, 30)
+screen_texture_size = (sprite_size.x, sprite_size.y, screen_width - sprite_size.x, screen_height - sprite_size.y)
+
+FPS = 3
+
+
 
 class Game:
+
+    DIRECTIONS = {'right':(1,0), 'left':(-1,0), 'up':(0,-1), 'down':(0,1)}
 
     def __init__(self):
         os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -34,21 +41,18 @@ class Game:
         # Game variables
         self.states = ['intro', 'init', 'run', 'pause', 'over', 'exit']
         self.current_state = 'intro'
-      
-        self.game_exit = False
-        self.game_over = False
-        
-        self.points = 0
-        self.speed = FPS
 
-        self.lead_x = screen_width/2 
-        self.lead_y = screen_height/2 
-        self.lead_x_change = sprite_size 
-        self.lead_y_change = 0 
-        
-        self.snake = Snake(self.lead_x, self.lead_y)
+    
+    def _create_entities(self):
+        # Create game objects ( Snake, apples , stones)
+        self.wall = []
+        self.draw_wall()
+        self.snake = Snake((self.lead_x, self.lead_y), 'right')
         self.stones = Stone()
-        self.apple = Apple(self.stones, self.snake)
+        self.apples = Apple()
+        self.stones.create(self) # Create one stone
+        self.apples.create(self) # Create one apple
+
 
 
     def load_resources(self, res_path):
@@ -63,11 +67,12 @@ class Game:
         self.ctx['res_holder']['color'] = Colors((255,255,255), (0,0,0), (255,0,0), (155,0,0), (0,120,0))
 
 
-        Sprites = namedtuple('Sprite', ['HEAD', 'TAIL', 'BODY', 'TURN', 'APPLE', 'STONE', 'DIAMOND', 'WALL', 'game_background', 'game_texture'])
+        Sprites = namedtuple('Sprite', ['HEAD', 'TAIL', 'BODY', 'TURN_RIGHT', 'TURN_LEFT', 'APPLE', 'STONE', 'DIAMOND', 'WALL', 'game_background', 'game_texture'])
         self.ctx['res_holder']['sprite'] = Sprites(pygame.transform.scale(pygame.image.load(get_path('snake_head_{}.png'.format(snake_color))), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('snake_tail_{}.png'.format(snake_color))), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('snake_body_{}.png'.format(snake_color))), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn_{}.png'.format(snake_color))), sprite_size),
+                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn_right_{}.png'.format(snake_color))), sprite_size),
+                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn_left_{}.png'.format(snake_color))), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('apple.png')), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('stone.png')), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('diamond.png')), sprite_size),
@@ -100,45 +105,82 @@ class Game:
         Creates wall around the map (TODO - reading map from file - specific to level)
         '''
         for x in range(screen_width):
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, (x*sprite_size.x, 0))
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, (x*sprite_size.x, screen_height-sprite_size.y))
+            a = (x*sprite_size.x, 0)
+            b = (x*sprite_size.x, screen_height-sprite_size.y)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
+            self.wall.append(a)
+            self.wall.append(b)
         for y in range(screen_height):
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, (0, y*sprite_size.y))
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, (screen_width-sprite_size.x, y*sprite_size.y))
+            a = (0, y*sprite_size.y)
+            b = (screen_width-sprite_size.x, y*sprite_size.y)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
+            self.wall.append(a)
+            self.wall.append(b)
 
+    def generate_random_location(self):
+        snake = self.snake.get_locations()
+        stones = self.stones.get_locations()
+        apples = self.apples.get_locations()
+        already_taken_space = snake + stones + apples + self.wall
+        xy = (0,0)
+        while True:
+            xy = (random.randrange(0, screen_width, sprite_size.x), random.randrange(0, screen_height, sprite_size.y))
+            if xy not in already_taken_space:
+                break
+        return xy
 
-    # def button(text, x, y, width, height, inactive, active, text_color = self.black, action = None):
-    #     cursor = pygame.mouse.get_pos()
-    #     click = pygame.mouse.get_pressed()
-        
-    #     if (x + width > cursor[0] > x and y + height > cursor[1] > y):
-    #         self.ctx.blit(ACTIVE_B, (x,y))
-            
-    #         if click[0] == 1 and action != None:
-    #             if action == 'play' or action == 'again':
-    #                 gameLoop()
-    #             elif action == 'controls' or action == 'previous':
-    #                 draw_controls()
-    #             elif action == 'quit':
-    #                 pygame.quit()
-    #                 pygame.font.quit()
-    #                 quit()
-    #             elif action == 'menu':
-    #                 draw_game_intro()
-    #             elif action == 'next':
-    #                 draw_controls_next()  
-    #     else:
-    #         ctx['screen'].blit(INACTIVE_B, (x,y))
-    #     draw_text(text, text_color, int(round(height/2)), x + width/2, y + height/4)
+    def check_collision(self):
+        snake = self.snake.get_locations()
+        print(snake)
+        stones = self.stones.get_locations()
+        apples = self.apples.get_locations()
 
+        # if snake[0] in self.wall:
+        #     self.ctx['res_holder']['music'].HIT.play()
+        #     self.game_over = True  
+        # check collision with the wall
+        if not(snake[0][0] > screen_texture_size[0] and snake[0][0] < screen_texture_size[2] \
+           and snake[0][1] > screen_texture_size[1] and snake[0][1] < screen_texture_size[3]):
+            self.ctx['res_holder']['music'].HIT.play()
+            self.game_over = True
+        # check if collision with stone occured
+        if snake[0] in stones:
+            self.ctx['res_holder']['music'].HIT.play()
+            self.game_over = True
+        # check collision with apples
+        try:
+            i = apples.index(snake[0])
+            self.ctx['res_holder']['music'].POINT.play()
+            self.points += 10  # TODO different for other entities
+            self.apples.destroy(i)
+            self.apples.create(self)
+        except ValueError:
+            pass
+        return
 
     def score(self, score):
         font = pygame.font.Font(self.ctx['res_holder']['font'].flup, 25)
         text = font.render('SCORE: {}'.format(score), True, self.ctx['res_holder']['color'].black)
         self.ctx['screen'].blit(text, [20,20])
 
-    def pause(self):
+    #### STATES ####
+    def init(self):
         
+        self.game_exit = False
+        self.game_over = False
+        
+        self.points = 0
+        self.speed = FPS
+
+        self.lead_x = screen_width/2 
+        self.lead_y = screen_height/2 
+        self.lead_x_change = sprite_size 
+        self.lead_y_change = 0 
+        self._create_entities()
+
+    def pause(self):        
         self.draw_text("PAUSE", self.ctx['res_holder']['color'].black, 60, screen_width/2, screen_height/2 -130)
         self.draw_text("Press P to continue", self.ctx['res_holder']['color'].black, 30, screen_width/2, screen_height/2)
         pygame.display.update()
@@ -151,134 +193,103 @@ class Game:
 
     def intro(self):
 
+        buttons = [Button(self.ctx['screen'], "PLAY", (screen_width//2, screen_height//2 - 150), lambda : print("PLAY")),
+                   Button(self.ctx['screen'], "QUIT", (screen_width//2, screen_height//2 - 30), lambda : print("QUIT")) ]
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     pygame.font.quit()
-                    quit()                
-                        
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].START, (0,0))
-
-            # button("PLAY", 350, 250, 200, 70, self.ctx['res_holder']['color'].red, self.ctx['res_holder']['color'].light_red, action = 'play')
-            # button("CONTROLS", 350, 350, 200, 70, self.ctx['res_holder']['color'].red, self.ctx['res_holder']['color'].light_red, action = 'controls')
-            # button("QUIT", 350, 450, 200, 70, self.ctx['res_holder']['color'].red, self.ctx['res_holder']['color'].light_red, action = 'quit')
-            
+                    quit()
+                elif event.type == pygame.MOUSEBUTTONDOWN:              
+                    for b in buttons:
+                        b.mouse_button_down()
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_texture, (0,0))
+            for b in buttons:
+                b.draw()                       
             pygame.display.update()
 
             self.clock.tick(15)
     
-    def draw(self):
-        self.apple.draw(self.ctx)
-        self.stones.draw(self.ctx)
-        self.snake.draw(self.ctx)
-        self.score(self.points)    
-        pygame.display.update()       
-
-    def update(self):
-        if self.snake.direction == "left":
-            self.lead_x_change = -sprite_size.x
-            self.lead_y_change = 0
-        elif self.snake.direction == "right":
-            self.lead_x_change = sprite_size.x
-            self.lead_y_change = 0
-        elif self.snake.direction == "up":
-            self.lead_y_change = -sprite_size.y
-            self.lead_x_change = 0
-        elif self.snake.direction == "down":
-            self.lead_y_change = sprite_size.y
-            self.lead_x_change = 0
-            
-        self.lead_x += self.lead_x_change
-        self.lead_y += self.lead_y_change
+    def gameover(self):
+        while self.game_over == True: 
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.game_exit = True
+                    return
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_q:
+                        self.game_over = True
+                        self.game_over = False 
+                    if event.key == pygame.K_c:
+                        self.init()              
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_texture, (0,0))
+            self.draw_text("SCORE: " + str(self.points), self.ctx['res_holder']['color'].black, 50, screen_width/2, screen_height/2+60)
                     
-        if (self.lead_x == self.apple.x and self.lead_y == self.apple.y):
-            
-            self.apple.renew(self.stones, self.snake)
-            self.snake.length += 1
-            self.points += 10
-            self.ctx['res_holder']['music'].POINT.play()
-            
-            if (self.points)%40 == 0:
-                self.stones.add(self.snake)
-                
-            if (self.points)%70 == 0:
-                self.speed += 1
-                print(self.speed)
-                        
-            if self.lead_x >= screen_width-sprite_size.x:
-                self.lead_x = sprite_size.x
-            elif self.lead_x < sprite_size.x:
-                self.lead_x = screen_width-2*sprite_size.x
-            elif self.lead_y >= screen_height-sprite_size.y:
-                self.lead_y = sprite_size.y
-            elif self.lead_y < sprite_size.y:
-                self.lead_y = screen_height-2*sprite_size.y
-
-        self.snake.update(self.lead_x, self.lead_y)
-        self.game_over = self.snake.isDead(self.stones, self.ctx)
-
+        # self.button("MENU", 100, 450, 200, 70, self.red, self.light_red, action = 'menu')
+        # self.button("PLAY AGAIN", 350, 450, 200, 70, self.red, self.light_red, action = 'again')
+        # self.button("QUIT", 600, 450, 200, 70, self.red, self.light_red, action = 'quit')
+        pygame.display.update()         
+        self.clock.tick(15)       
+     
     def handle_event(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 self.game_exit= True
             if event.type == pygame.KEYDOWN:
-                if (event.key == pygame.K_LEFT) and self.snake.direction != "right":
-                    self.snake.direction = "left"
-                elif (event.key == pygame.K_RIGHT) and self.snake.direction != "left":
-                    self.snake.direction = "right"
-                elif (event.key == pygame.K_UP) and self.snake.direction != "down":
-                    self.snake.direction = "up"    
-                elif (event.key == pygame.K_DOWN) and self.snake.direction != "up":
-                    self.snake.direction = "down"
-
+                if (event.key == pygame.K_LEFT):
+                    self.snake.update_direction(self.DIRECTIONS['left'])
+                elif (event.key == pygame.K_RIGHT):
+                    self.snake.update_direction(self.DIRECTIONS['right'])
+                elif (event.key == pygame.K_UP):
+                    self.snake.update_direction(self.DIRECTIONS['up'])   
+                elif (event.key == pygame.K_DOWN):
+                    self.snake.update_direction(self.DIRECTIONS['down'])
                 if event.key == pygame.K_p:
                     self.pause()
+
+    def update(self):
+        self.snake.update()
+        self.check_collision()
+
+
+    def draw(self):
+        self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_background, (0,0))
+        self.draw_wall() 
+        self.apples.draw(self.ctx)
+        self.stones.draw(self.ctx)
+        self.snake.draw(self.ctx)
+        self.score(self.points)    
+        pygame.display.update()
 
 
     def run(self):
 
-        #game_states
+        self.init()
 
-        self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_background, (0,0))
-        self.draw_wall()  
-        while not self.game_exit:
+        if self.current_state == 'intro':
+            self.intro()
+        while not self.game_exit: 
             self.handle_event()
             self.update()
+                                   
+
+
             self.draw() 
-            self.clock.tick(self.speed)                                    
-            while self.game_over == True: 
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        self.game_exit = True
-                        self.game_exit = False
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_q:
-                            self.game_over = True
-                            self.game_over = False 
-                        #if event.key == pygame.K_c:
-                            #init_game()  #TODO
-                            
-                self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].game_texture, (0,0))
-                self.draw_text("SCORE: " + str(self.points), self.ctx['res_holder']['color'].black, 50, screen_width/2, screen_height/2-25)
-                            
-                # self.button("MENU", 100, 450, 200, 70, self.red, self.light_red, action = 'menu')
-                # self.button("PLAY AGAIN", 350, 450, 200, 70, self.red, self.light_red, action = 'again')
-                # self.button("QUIT", 600, 450, 200, 70, self.red, self.light_red, action = 'quit')
-         
-                pygame.display.update()         
-                self.clock.tick(15)
+            self.clock.tick(self.speed) 
                 
         pygame.quit()
         pygame.font.quit()
         quit()
+
+
 
 class Button():
     WHITE = (255, 255, 255)
     GREY = (200, 200, 200)
     BLACK = (0, 0, 0)
     
-    def __init__(self, screen, txt, location, action, bg=WHITE, fg=BLACK, size=(80, 30), font_name="Segoe Print", font_size=16):
+    def __init__(self, screen, txt, location, action, bg=WHITE, fg=BLACK, size=(270, 90), font_name="Segoe Print", font_size=16):
         self.color = bg  # the static (normal) color
         self.bg = bg  # actual game_background color, can change on mouseover
         self.fg = fg  # text color
@@ -295,17 +306,22 @@ class Button():
         self.call_back_ = action
 
     def draw(self):
-        self.mouseover()
+        self.mouse_over()
 
         self.surface.fill(self.bg)
         self.surface.blit(self.txt_surf, self.txt_rect)
-        self.screen.sscreen.blit(self.surface, self.rect)
+        self.screen.blit(self.surface, self.rect)
 
-    def mouseover(self):
+    def mouse_over(self):
         self.bg = self.color
         pos = pygame.mouse.get_pos()
         if self.rect.collidepoint(pos):
-            self.bg = GREY  # mouseover color
+            self.bg = Button.GREY  # mouseover color
+
+    def mouse_button_down(self):
+        pos = pygame.mouse.get_pos()    
+        if self.rect.collidepoint(pos):
+            self.call_back()
 
     def call_back(self):
         self.call_back_()
@@ -314,143 +330,128 @@ class Button():
 class Stone:
     
     def __init__(self):
-        self.list = []
+        self.stones = []
 
-    def add(self, other):
-    
-        newStoneX, newStoneY = randLocationGen(self.list, other.list)
-        newStone = [newStoneX, newStoneY]
-        self.list.append(newStone)
+    def create(self, game):
+        new_stone = game.generate_random_location()
+        self.stones.append(new_stone)
+
+    def destroy(self, idx):
+        del self.stones[idx]
+
+    def get_locations(self):
+        return self.stones
         
     def draw(self, ctx):
-        for i in range(len(self.list)):
-            ctx['screen'].blit(ctx['res_holder']['sprite'].STONE, (self.list[i][0],self.list[i][1]))
-            
-    def destroy(self, stone):
-        self.list.remove(stone)
+        for st in self.stones:
+            ctx['screen'].blit(ctx['res_holder']['sprite'].STONE, (st[0], st[1]))
+    
+
             
 class Apple:
     
-    def __init__(self, stones, snake):
-        self.renew(stones, snake)
+    def __init__(self):
+        self.apples = []
+
+    def create(self, game):
+        new_apple = game.generate_random_location()
+        self.apples.append(new_apple)
     
-    def renew(self, stones, snake):
-        self.x, self.y = randLocationGen(stones.list, snake.list)
-        
+    def destroy(self, idx):
+        del self.apples[idx]
+
+    def get_locations(self):
+        return self.apples
+  
     def draw(self, ctx):
-        ctx['screen'].blit(ctx['res_holder']['sprite'].APPLE, (self.x, self.y))
+        for ap in self.apples:
+            ctx['screen'].blit(ctx['res_holder']['sprite'].APPLE, (ap[0], ap[1]))
 
-                   
-class Snake:
+
+
+class Snake():
     
-    def __init__(self, lead_x, lead_y):
-        self.direction = "right"
-        
-        self.list = [["right", lead_x-2*sprite_size.x, lead_y],
-                     ["right", lead_x-sprite_size.x, lead_y],
-                     ["right", lead_x, lead_y]]
-                          
-        self.head = ["right", lead_x, lead_y]
-        self.length = 3
-        self.superTimer = 0
-        
-    def superSnake(self, FPS):
-        self.superTimer = 10*FPS
-        
-    def update(self, lead_x, lead_y):
-        self.head = []
-        self.head.append(self.direction)
-            
-        self.head.append(lead_x)
-        self.head.append(lead_y)
-        
-        self.list.append(self.head)
-        
-        if len(self.list) > self.length:
-            del self.list[0]
+    Segment = namedtuple('Segment', ['direction', 'location'])
 
-        if self.superTimer > 0:
-            self.superTimer -= 1
+    def __init__(self, location, direction):
+        self.direction = direction
+        self.direction = Game.DIRECTIONS['right']
+        self.last_direction = self.direction
+        self.turns = deque()
+
+        # Apply first 3 segments of the snake
+        self.snake = [
+                        Snake.Segment(self.direction, (location[0], location[1])),
+                        Snake.Segment(self.direction, (location[0]-sprite_size.x, location[1])),
+                        Snake.Segment(self.direction, (location[0]-sprite_size.x*2, location[1]))
+                     ]
+
+    def _calc_next_position(self, segment_index, new_direction):
+        new_location  = tuple(map(add, self.snake[segment_index].location, tuple(map(mul, new_direction, sprite_size))))
+        self.snake[segment_index] = Snake.Segment(new_direction, new_location)
+
+    def get_locations(self):
+        return [seg.location for seg in self.snake]
+    
+    def update(self):
+
+        if self.last_direction != self.direction:
+            self.turns.append(Snake.Segment(self.direction, self.snake[0].location))
+            #self._calc_next_position(0, self.direction)    
+        else:
+            # update snake body
+            for i,seg in enumerate(self.snake):
+                self._calc_next_position(i, seg.direction) 
+            
+        # check if there is any segment should turn
+        for i,seg in enumerate(self.snake):
+            for j,turn in enumerate(self.turns):
+                if seg.location == turn.location:
+                    self.snake[i] = turn
+                    # if this was tail, remove the first(left) turn from the turns queue
+                    if (i == len(self.snake)-1 and j == 0):
+                        self.turns.popleft()
+                        break
+
+        self.last_direction = self.direction
+
+    def update_direction(self, direction):
+        if direction == Game.DIRECTIONS['right'] and self.direction == Game.DIRECTIONS['left']:
+            return
+        if direction == Game.DIRECTIONS['left'] and self.direction == Game.DIRECTIONS['right']:       
+            return
+        if direction == Game.DIRECTIONS['up'] and self.direction == Game.DIRECTIONS['down']:
+            return
+        if direction == Game.DIRECTIONS['down'] and self.direction == Game.DIRECTIONS['up']:       
+            return
+        self.direction = direction
 
     def draw(self, ctx):
-        self.view(ctx['res_holder']['sprite'].HEAD, ctx['res_holder']['sprite'].TAIL,
-                  ctx['res_holder']['sprite'].BODY, ctx['res_holder']['sprite'].TURN, ctx)
-               
-    def view(self, head, tail, body, turn, ctx):
-        
-        ctx['screen'].blit(rotate(self.list[-1],head), (self.list[-1][1],self.list[-1][2]))       
-        ctx['screen'].blit(rotate(self.list[1],tail), (self.list[0][1],self.list[0][2]))
-            
-        for i in range(1, self.length-1):
-            
-            if self.list[i][0] == self.list[i+1][0]:
-                ctx['screen'].blit(rotate(self.list[i],body), (self.list[i][1],self.list[i][2]))
-            
-            elif (self.list[i][0] == "down" and self.list[i+1][0] == "right") or (self.list[i][0] == "right" and self.list[i+1][0] == "up") or (self.list[i][0] == "up" and self.list[i+1][0] == "left") or (self.list[i][0] == "left" and self.list[i+1][0] == "down"):       
-                ctx['screen'].blit(rotate(self.list[i+1],turn), (self.list[i][1],self.list[i][2]))
-            
-            elif (self.list[i][0] == "right" and self.list[i+1][0] == "down") or (self.list[i][0] == "down" and self.list[i+1][0] == "left") or (self.list[i][0] == "left" and self.list[i+1][0] == "up") or (self.list[i][0] == "up" and self.list[i+1][0] == "right"):        
-                ctx['screen'].blit(rotate(self.list[i+1],turn), (self.list[i][1],self.list[i][2]))
-        
-    def isDead(self, other, ctx):
-        
-        for eachSegment in self.list[:-1]:
-            if eachSegment[1] == self.head[1] and eachSegment[2] == self.head[2]:
-                ctx['res_holder']['music'].HIT.play()
-                pygame.mixer.music.set_volume(0.2)
-                return True
-                
-        if self.superTimer <= 0:
-            
-            for eachStone in other.list:
-                if eachStone[0] == self.head[1] and eachStone[1] == self.head[2]:
-                    ctx['res_holder']['music'].HIT.play()
-                    return  True
-                    
-            if self.head[1] >= screen_width-sprite_size.y or self.head[1] < sprite_size.y or self.head[2] >= screen_height-sprite_size.x or self.head[2] < sprite_size.x:
-                ctx['res_holder']['music'].HIT.play()
-                return True
-                
-        return False
-        
-    def trim(self):
-        if len(self.list) > 13:
-            self.list = self.list[10:]
-            self.length -= 10
+        for i, seg in enumerate(self.snake):
+            sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].BODY)
+            if seg in self.turns:
+                sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TURN_RIGHT)    
+            if i == 0:
+                sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].HEAD)
+            elif i == len(self.snake)-1:
+                sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TAIL)
+            print(seg)  
+            ctx['screen'].blit(sprite, seg.location)       
 
-def rotate(segment, image):
-    if segment[0] == "right":
-        rotatedImage = pygame.transform.rotate(image, 0)
-    elif segment[0] == "left":
-        rotatedImage = pygame.transform.rotate(image, 180)
-    elif segment[0] == "up":
-        rotatedImage = pygame.transform.rotate(image, 90)    
-    elif segment[0] == "down":
-        rotatedImage = pygame.transform.rotate(image, 270)       
-    return rotatedImage        
-    
-    
-def randLocationGen (stonesList, snakeList):
-    randX = round((random.randrange(sprite_size.x, screen_width - 2*sprite_size.x))/sprite_size.x)*sprite_size.x
-    randY = round((random.randrange(sprite_size.y, screen_height - 2*sprite_size.y))/sprite_size.y)*sprite_size.y
-    
-
-    for stone in stonesList:
-        for element in snakeList:
-            if(randX == stone[0] and randY == stone[1]) or (randX == element[1] and randY == element[2]):
-                print("!TEXT!" + str(randX)+str(element[1]) + str(randY)+str(element[2]))
-                return randLocationGen(stonesList, snakeList)
-    
-    return randX, randY
+    @staticmethod
+    def rotate_segment(segment, sprite):
+        if segment.direction == Game.DIRECTIONS['right']:
+            rotated_sprite = pygame.transform.rotate(sprite, 0)
+        elif segment.direction == Game.DIRECTIONS['left']:
+            rotated_sprite = pygame.transform.rotate(sprite, 180)
+        elif segment.direction == Game.DIRECTIONS['up']:
+            rotated_sprite = pygame.transform.rotate(sprite, 90)    
+        elif segment.direction == Game.DIRECTIONS['down']:
+            rotated_sprite = pygame.transform.rotate(sprite, 270)       
+        return rotated_sprite
 
                     
 
-
-# def draw_game_intro():
-    
-
-        
-                    
     
 if __name__ == "__main__":
     game = Game()
