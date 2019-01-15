@@ -436,7 +436,6 @@ class Snake():
         return [seg.location for seg in self.snake]
     
     def update(self):
-
         # Did a snake direction changed before ?
         if self.last_direction != self.direction:
             # Add turn location to the turns queue
@@ -480,12 +479,13 @@ class Snake():
         for i, seg in enumerate(self.snake):
             sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].BODY)
             #if seg in self.turns:
-            #    sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TURN)    # TODO for now let's use body for turns
+            #    sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TURN)    # TODO use TURN sprite for turns
             if i == 0:
                 sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].HEAD)
             elif i == len(self.snake)-1:
                 sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TAIL)
-            ctx['screen'].blit(sprite, seg.location)       
+            ctx['screen'].blit(sprite, seg.location)
+        print(self.snake[0].location)     
 
     @staticmethod
     def rotate_segment(segment, sprite):
