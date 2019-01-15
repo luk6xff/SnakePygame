@@ -24,7 +24,7 @@ class Game:
     FPS = 5
 
     def __init__(self):
-        os.environ['SDL_VIDEO_CENTERED'] = '1'
+        #os.environ['SDL_VIDEO_CENTERED'] = '1'
         pygame.init()
         pygame.font.init()
         pygame.mixer.init()
@@ -56,13 +56,32 @@ class Game:
         """
         self.wall = []
         self.draw_wall()
-        self.snake = Snake((screen_width//2, screen_height//2), 'right')
+        self.snake = Snake(((screen_width//2),(screen_height//2)))
         self.stones = Stone()
         self.apples = Apple()
         self.stones.create(self) # Create one stone
         self.apples.create(self) # Create one apple
 
 
+    def draw_wall(self):
+        '''
+        Creates wall around the map (TODO - reading map from file - specific to level)
+        '''
+        self.wall.clear()
+        for x in range(0, screen_width, sprite_size.x):
+            a = (x, 0)
+            b = (x, screen_height-sprite_size.y)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
+            self.wall.append(a)
+            self.wall.append(b)
+        for y in range(0, screen_height, sprite_size.y):
+            a = (0, y)
+            b = (screen_width-sprite_size.x, y)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
+            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
+            self.wall.append(a)
+            self.wall.append(b)
 
     def load_resources(self, res_path):
         """
@@ -72,19 +91,15 @@ class Game:
         def get_path(entity_path):
             return os.path.join(res_path, entity_path)
 
-        snake_colors = ['red', 'blue', 'purple']
-        snake_color = snake_colors[0]
-
         Colors = namedtuple('Color', ['white', 'black', 'red', 'light_red', 'dark_green'])
         self.ctx['res_holder']['color'] = Colors((255,255,255), (0,0,0), (255,0,0), (155,0,0), (0,120,0))
 
 
-        Sprites = namedtuple('Sprite', ['HEAD', 'TAIL', 'BODY', 'TURN_RIGHT', 'TURN_LEFT', 'APPLE', 'STONE', 'DIAMOND', 'WALL', 'game_background', 'game_texture'])
-        self.ctx['res_holder']['sprite'] = Sprites(pygame.transform.scale(pygame.image.load(get_path('snake_head_{}.png'.format(snake_color))), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_tail_{}.png'.format(snake_color))), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_body_{}.png'.format(snake_color))), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn_right_{}.png'.format(snake_color))), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn_left_{}.png'.format(snake_color))), sprite_size),
+        Sprites = namedtuple('Sprite', ['HEAD', 'TAIL', 'BODY', 'TURN', 'APPLE', 'STONE', 'DIAMOND', 'WALL', 'game_background', 'game_texture'])
+        self.ctx['res_holder']['sprite'] = Sprites(pygame.transform.scale(pygame.image.load(get_path('snake_head.png')), sprite_size),
+                                                   pygame.transform.scale(pygame.image.load(get_path('snake_tail.png')), sprite_size),
+                                                   pygame.transform.scale(pygame.image.load(get_path('snake_body.png')), sprite_size),
+                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn.png')), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('apple.png')), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('stone.png')), sprite_size),
                                                    pygame.transform.scale(pygame.image.load(get_path('diamond.png')), sprite_size),
@@ -113,25 +128,6 @@ class Game:
         text_rect.midtop = (x, y)
         self.ctx['screen'].blit(text_surface, text_rect)
 
-
-    def draw_wall(self):
-        '''
-        Creates wall around the map (TODO - reading map from file - specific to level)
-        '''
-        for x in range(screen_width):
-            a = (x*sprite_size.x, 0)
-            b = (x*sprite_size.x, screen_height-sprite_size.y)
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
-            self.wall.append(a)
-            self.wall.append(b)
-        for y in range(screen_height):
-            a = (0, y*sprite_size.y)
-            b = (screen_width-sprite_size.x, y*sprite_size.y)
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
-            self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
-            self.wall.append(a)
-            self.wall.append(b)
 
     def generate_random_location(self):
         """
@@ -364,6 +360,7 @@ class Button():
         self.call_back_()
 
 
+
 class Stone:
     
     def __init__(self):
@@ -410,8 +407,7 @@ class Snake():
     
     Segment = namedtuple('Segment', ['direction', 'location'])
 
-    def __init__(self, location, direction):
-        self.direction = direction
+    def __init__(self, location):
         self.direction = Game.DIRECTIONS['right']
         self.last_direction = self.direction
         self.turns = deque()
@@ -431,7 +427,6 @@ class Snake():
         return [seg.location for seg in self.snake]
     
     def update(self):
-
         if self.last_direction != self.direction:
             self.turns.append(Snake.Segment(self.direction, self.snake[0].location))
             #self._calc_next_position(0, self.direction)    
@@ -451,6 +446,7 @@ class Snake():
                         break
 
         self.last_direction = self.direction
+        print(self.snake[0].location)
 
     def update_direction(self, direction):
         if direction == Game.DIRECTIONS['right'] and self.direction == Game.DIRECTIONS['left']:
@@ -466,8 +462,8 @@ class Snake():
     def draw(self, ctx):
         for i, seg in enumerate(self.snake):
             sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].BODY)
-            if seg in self.turns:
-                sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TURN_RIGHT)    
+            #if seg in self.turns:
+            #    sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TURN)    # TODO for now let's use body for turns
             if i == 0:
                 sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].HEAD)
             elif i == len(self.snake)-1:
@@ -490,6 +486,7 @@ class Snake():
 
     
 if __name__ == "__main__":
+    print(screen_texture_size)
     game = Game()
     game.run()
 
