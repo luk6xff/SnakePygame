@@ -21,7 +21,7 @@ screen_texture_size = (sprite_size.x, sprite_size.y, screen_width - sprite_size.
 class Game:
 
     DIRECTIONS = {'right':(1,0), 'left':(-1,0), 'up':(0,-1), 'down':(0,1)}
-    FPS = 5
+    FPS = 4
 
     def __init__(self):
         #os.environ['SDL_VIDEO_CENTERED'] = '1'
@@ -163,6 +163,7 @@ class Game:
         # check collision with apples
         try:
             i = apples.index(snake[0])
+            self.snake.grow()
             self.ctx['res_holder']['music'].POINT.play()
             self.points += 10  # TODO different for other entities
             self.apples.destroy(i)
@@ -266,17 +267,24 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 self._set_state('exit')
+                break
             if event.type == pygame.KEYDOWN:
                 if (event.key == pygame.K_LEFT):
                     self.snake.update_direction(self.DIRECTIONS['left'])
+                    break
                 elif (event.key == pygame.K_RIGHT):
                     self.snake.update_direction(self.DIRECTIONS['right'])
+                    break
                 elif (event.key == pygame.K_UP):
-                    self.snake.update_direction(self.DIRECTIONS['up'])   
+                    self.snake.update_direction(self.DIRECTIONS['up'])
+                    break 
                 elif (event.key == pygame.K_DOWN):
                     self.snake.update_direction(self.DIRECTIONS['down'])
+                    break
                 if event.key == pygame.K_p:
-                    self._set_state('pause') 
+                    self._set_state('pause')
+                    break
+                
 
     def update(self):
         """
@@ -416,7 +424,8 @@ class Snake():
         self.snake = [
                         Snake.Segment(self.direction, (location[0], location[1])),
                         Snake.Segment(self.direction, (location[0]-sprite_size.x, location[1])),
-                        Snake.Segment(self.direction, (location[0]-sprite_size.x*2, location[1]))
+                        Snake.Segment(self.direction, (location[0]-sprite_size.x*2, location[1])),
+                        Snake.Segment(self.direction, (location[0]-sprite_size.x*3, location[1]))
                      ]
 
     def _calc_next_position(self, segment_index, new_direction):
@@ -427,15 +436,19 @@ class Snake():
         return [seg.location for seg in self.snake]
     
     def update(self):
+
+        # Did a snake direction changed before ?
         if self.last_direction != self.direction:
+            # Add turn location to the turns queue
             self.turns.append(Snake.Segment(self.direction, self.snake[0].location))
-            #self._calc_next_position(0, self.direction)    
-        else:
-            # update snake body
-            for i,seg in enumerate(self.snake):
-                self._calc_next_position(i, seg.direction) 
-            
-        # check if there is any segment should turn
+            # Update direction of the head
+            self.snake[0] = Snake.Segment(self.direction, self.snake[0].location)
+
+        # Update snake's body position
+        for i,seg in enumerate(self.snake):
+            self._calc_next_position(i, seg.direction)
+     
+        # Check if there is any segment which should turn
         for i,seg in enumerate(self.snake):
             for j,turn in enumerate(self.turns):
                 if seg.location == turn.location:
@@ -443,10 +456,14 @@ class Snake():
                     # if this was tail, remove the first(left) turn from the turns queue
                     if (i == len(self.snake)-1 and j == 0):
                         self.turns.popleft()
-                        break
+                        #print(self.turns)
+                        return
 
         self.last_direction = self.direction
-        print(self.snake[0].location)
+
+    def grow(self):
+        # TODO
+        pass
 
     def update_direction(self, direction):
         if direction == Game.DIRECTIONS['right'] and self.direction == Game.DIRECTIONS['left']:
@@ -486,7 +503,6 @@ class Snake():
 
     
 if __name__ == "__main__":
-    print(screen_texture_size)
     game = Game()
     game.run()
 
