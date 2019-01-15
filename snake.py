@@ -38,7 +38,6 @@ class Game:
         self.load_resources('resources')
 
         # Game states dictionary
-
         self.states = {'menu':self.menu, 'init':self.init, 'play':self.play, 'pause':self.pause, 'over':self.game_over, 'exit':self.exit}
         self._current_state = 'menu'
 
@@ -163,7 +162,7 @@ class Game:
         # check collision with apples
         try:
             i = apples.index(snake[0])
-            self.snake.grow()
+            self.snake.update(grow=True)
             self.ctx['res_holder']['music'].POINT.play()
             self.points += 10  # TODO different for other entities
             self.apples.destroy(i)
@@ -418,7 +417,6 @@ class Snake():
     def __init__(self, location):
         self.direction = Game.DIRECTIONS['right']
         self.last_direction = self.direction
-        self.turns = deque()
 
         # Apply first 3 segments of the snake
         self.snake = [
@@ -435,34 +433,18 @@ class Snake():
     def get_locations(self):
         return [seg.location for seg in self.snake]
     
-    def update(self):
-        # Did a snake direction changed before ?
-        if self.last_direction != self.direction:
-            # Add turn location to the turns queue
-            self.turns.append(Snake.Segment(self.direction, self.snake[0].location))
-            # Update direction of the head
-            self.snake[0] = Snake.Segment(self.direction, self.snake[0].location)
-
-        # Update snake's body position
-        for i,seg in enumerate(self.snake):
-            self._calc_next_position(i, seg.direction)
-     
-        # Check if there is any segment which should turn
-        for i,seg in enumerate(self.snake):
-            for j,turn in enumerate(self.turns):
-                if seg.location == turn.location:
-                    self.snake[i] = turn
-                    # if this was tail, remove the first(left) turn from the turns queue
-                    if (i == len(self.snake)-1 and j == 0):
-                        self.turns.popleft()
-                        #print(self.turns)
-                        return
+    def update(self, grow = False):
+        # Update second segment with 
+        self.snake[0] = Snake.Segment(self.last_direction, self.snake[0].location)
+        # Add new head
+        self.snake.insert(0, Snake.Segment(self.direction, (self.snake[0].location[0]+self.direction[0]*sprite_size.x,
+                                                            self.snake[0].location[1]+self.direction[1]*sprite_size.y)))
+        # Remove last segment
+        if not grow:
+            self.snake.pop()
 
         self.last_direction = self.direction
-
-    def grow(self):
-        # TODO
-        pass
+        
 
     def update_direction(self, direction):
         if direction == Game.DIRECTIONS['right'] and self.direction == Game.DIRECTIONS['left']:
@@ -485,7 +467,7 @@ class Snake():
             elif i == len(self.snake)-1:
                 sprite = Snake.rotate_segment(seg, ctx['res_holder']['sprite'].TAIL)
             ctx['screen'].blit(sprite, seg.location)
-        print(self.snake[0].location)     
+        #print(self.snake[0].location)     
 
     @staticmethod
     def rotate_segment(segment, sprite):
