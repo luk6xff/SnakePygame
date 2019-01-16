@@ -13,21 +13,21 @@ from operator import add,mul
 
 screen_width = 900
 screen_height = 600
-sprite_size = namedtuple('sprite_size', ['x', 'y'])(30, 30)
-screen_texture_size = (sprite_size.x, sprite_size.y, screen_width - sprite_size.x, screen_height - sprite_size.y)
-
+grid_size = namedtuple('grid_size', ['x', 'y'])(30, 30)
 
 
 class Game:
 
     DIRECTIONS = {'right':(1,0), 'left':(-1,0), 'up':(0,-1), 'down':(0,1)}
-    FPS = 4
+    FPS = 60
+    SPEED = 10
 
     def __init__(self):
         #os.environ['SDL_VIDEO_CENTERED'] = '1'
         pygame.init()
         pygame.font.init()
         pygame.mixer.init()
+        self.frame = 0
         self.ctx = {
                     'screen': pygame.display.set_mode((screen_width, screen_height)),
                     'res_holder': defaultdict()
@@ -67,16 +67,16 @@ class Game:
         Creates wall around the map (TODO - reading map from file - specific to level)
         '''
         self.wall.clear()
-        for x in range(0, screen_width, sprite_size.x):
+        for x in range(0, screen_width, grid_size.x):
             a = (x, 0)
-            b = (x, screen_height-sprite_size.y)
+            b = (x, screen_height-grid_size.y)
             self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
             self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
             self.wall.append(a)
             self.wall.append(b)
-        for y in range(0, screen_height, sprite_size.y):
+        for y in range(0, screen_height, grid_size.y):
             a = (0, y)
-            b = (screen_width-sprite_size.x, y)
+            b = (screen_width-grid_size.x, y)
             self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, a)
             self.ctx['screen'].blit(self.ctx['res_holder']['sprite'].WALL, b)
             self.wall.append(a)
@@ -94,17 +94,18 @@ class Game:
         self.ctx['res_holder']['color'] = Colors((255,255,255), (0,0,0), (255,0,0), (155,0,0), (0,120,0))
 
 
-        Sprites = namedtuple('Sprite', ['HEAD', 'TAIL', 'BODY', 'TURN', 'APPLE', 'STONE', 'DIAMOND', 'WALL', 'game_background', 'game_texture'])
-        self.ctx['res_holder']['sprite'] = Sprites(pygame.transform.scale(pygame.image.load(get_path('snake_head.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_tail.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_body.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('snake_turn.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('apple.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('stone.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('diamond.png')), sprite_size),
-                                                   pygame.transform.scale(pygame.image.load(get_path('wall.png')), sprite_size),
-                                                   pygame.image.load(get_path('game_background.jpg')),
-                                                   pygame.image.load(get_path('game_texture.jpg')))
+        Sprites = namedtuple('Sprite', ['HEAD', 'TAIL', 'BODY', 'TURN_RIGHT', 'TURN_LEFT', 'APPLE', 'STONE', 'DIAMOND', 'WALL', 'game_background', 'game_texture'])
+        self.ctx['res_holder']['sprite'] = Sprites(pygame.transform.scale(pygame.image.load(get_path('snake_head.png')), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/snake_tail.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/snake_body_straight.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/snake_body_right.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/snake_body_left.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/apple.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/stone.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/diamond.png'), grid_size),
+                                                   pygame.transform.scale(pygame.image.load('resources/wall.png'), grid_size),
+                                                   pygame.image.load('resources/game_background.jpg'),
+                                                   pygame.image.load('resources/game_texture.jpg'))
                                                    
         Music = namedtuple('Music', ['POINT', 'HIT'])
         self.ctx['res_holder']['music'] = Music(pygame.mixer.Sound(get_path("point.wav")),
@@ -138,7 +139,7 @@ class Game:
         already_taken_space = snake + stones + apples + self.wall
         xy = (0,0)
         while True:
-            xy = (random.randrange(0, screen_width, sprite_size.x), random.randrange(0, screen_height, sprite_size.y))
+            xy = (random.randrange(0, screen_width, grid_size.x), random.randrange(0, screen_height, grid_size.y))
             if xy not in already_taken_space:
                 break
         return xy
@@ -151,24 +152,20 @@ class Game:
         stones = self.stones.get_locations()
         apples = self.apples.get_locations()
 
-        if not(snake[0][0] > screen_texture_size[0] and snake[0][0] < screen_texture_size[2] \
-           and snake[0][1] > screen_texture_size[1] and snake[0][1] < screen_texture_size[3]):
+        snake_location = snake[1:]
+        dead_area = set(snake_location + stones + self.wall)
+        if snake[0] in dead_area:
             self.ctx['res_holder']['music'].HIT.play()
             self._set_state('over') 
-        # check if collision with stone occured
-        if snake[0] in stones:
-            self.ctx['res_holder']['music'].HIT.play()
-            self._set_state('over') 
-        # check collision with apples
-        try:
-            i = apples.index(snake[0])
+
+        # Check if we ate the apple
+        if snake[0] in apples:
+            idx = apples.index(snake[0])
             self.snake.update(grow=True)
             self.ctx['res_holder']['music'].POINT.play()
             self.points += 10  # TODO different for other entities
-            self.apples.destroy(i)
+            self.apples.destroy(idx)
             self.apples.create(self)
-        except ValueError:
-            pass
 
     def score(self, score):
         """
@@ -181,7 +178,6 @@ class Game:
     #### STATES callbacks ####
     def init(self):        
         self.points = 0
-        self.speed = Game.FPS
         self._create_entities()
         self._set_state('play')
 
@@ -192,7 +188,8 @@ class Game:
         if self._current_state is not 'play':
             return
         self.draw()
-        self.clock.tick(self.speed) 
+        self.clock.tick(Game.FPS)
+        self.frame += 1
 
     def pause(self):        
         self.draw_text("PAUSE", self.ctx['res_holder']['color'].black, 60, screen_width/2, screen_height/2 -130)
@@ -289,8 +286,9 @@ class Game:
         """
         Responsible for updating game status 
         """
-        self.snake.update()
-        self.check_collision()
+        if self.frame % Game.SPEED == 0:
+            self.snake.update()
+            self.check_collision()
 
 
     def draw(self):
@@ -421,13 +419,13 @@ class Snake():
         # Apply first 3 segments of the snake
         self.snake = [
                         Snake.Segment(self.direction, (location[0], location[1])),
-                        Snake.Segment(self.direction, (location[0]-sprite_size.x, location[1])),
-                        Snake.Segment(self.direction, (location[0]-sprite_size.x*2, location[1])),
-                        Snake.Segment(self.direction, (location[0]-sprite_size.x*3, location[1]))
+                        Snake.Segment(self.direction, (location[0]-grid_size.x, location[1])),
+                        Snake.Segment(self.direction, (location[0]-grid_size.x*2, location[1])),
+                        Snake.Segment(self.direction, (location[0]-grid_size.x*3, location[1]))
                      ]
 
     def _calc_next_position(self, segment_index, new_direction):
-        new_location  = tuple(map(add, self.snake[segment_index].location, tuple(map(mul, new_direction, sprite_size))))
+        new_location  = tuple(map(add, self.snake[segment_index].location, tuple(map(mul, new_direction, grid_size))))
         self.snake[segment_index] = Snake.Segment(new_direction, new_location)
 
     def get_locations(self):
@@ -437,8 +435,8 @@ class Snake():
         # Update second segment with 
         self.snake[0] = Snake.Segment(self.last_direction, self.snake[0].location)
         # Add new head
-        self.snake.insert(0, Snake.Segment(self.direction, (self.snake[0].location[0]+self.direction[0]*sprite_size.x,
-                                                            self.snake[0].location[1]+self.direction[1]*sprite_size.y)))
+        self.snake.insert(0, Snake.Segment(self.direction, (self.snake[0].location[0]+self.direction[0]*grid_size.x,
+                                                            self.snake[0].location[1]+self.direction[1]*grid_size.y)))
         # Remove last segment
         if not grow:
             self.snake.pop()
