@@ -1,12 +1,10 @@
 import pygame
 import random
 import os
-from collections import namedtuple, defaultdict
-from collections import deque
-from operator import add,mul
+from collections import namedtuple
+
 
 # resources taken from:
-#  http://www.biryuk.com/2015/05/free-snake-sprites.html
 #  https://openclipart.org/detail/265429/brick-wall
 #  http://texturelib.com/texture/?path=/Textures/grass/grass/grass_grass_0121
 #  https://all-free-download.com/free-photos/download/snake_skin_texture_02_hd_pictures_169872_download.html

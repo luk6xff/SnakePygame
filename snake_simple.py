@@ -1,11 +1,8 @@
 import sys
 import pygame
-from pygame.locals import *
 import random
 import os
-from collections import namedtuple, defaultdict
-from collections import deque
-from operator import add,mul
+from collections import namedtuple
 
 
 # -----OBJECTS-----
